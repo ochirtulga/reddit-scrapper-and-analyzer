@@ -8,9 +8,12 @@ Automated Reddit scraping and word frequency analysis system.
 # Install dependencies
 pip install requests beautifulsoup4
 
-# Scrape Reddit data
+# Scrape Reddit data (continuous mode)
 cd scraper
 python scraper.py
+
+# Scrape Reddit data ONCE (single run)
+python scraper.py --once
 
 # Analyze word frequencies
 cd analyzer
@@ -48,10 +51,12 @@ reddit-scrapper-and-analyzer/
 ## Usage Examples
 
 ```bash
-# Scrape r/Python every 30 minutes
+# Scrape r/Python every 30 minutes (continuous)
 cd scraper
-python scraper.py
-# Enter: Python, 30, data
+python scraper.py --subreddit Python --interval 30
+
+# Scrape r/Python ONCE (single run)
+python scraper.py --once --subreddit Python
 
 # Analyze word frequencies
 cd analyzer

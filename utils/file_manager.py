@@ -13,7 +13,7 @@ import sys
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config
+from utils.config import Config
 
 class FileManager:
     """File manager for handling data file operations"""

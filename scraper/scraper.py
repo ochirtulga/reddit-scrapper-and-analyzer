@@ -6,6 +6,7 @@ Reddit Auto Scraper
 import requests
 import json
 import time
+import argparse
 from datetime import datetime, timedelta
 from urllib.parse import urljoin
 from typing import List, Dict, Optional
@@ -15,7 +16,7 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config
+from utils.config import Config
 from utils.database import DatabaseManager
 from utils.file_manager import FileManager
 from utils.logger import LoggerManager
@@ -253,25 +254,40 @@ class RedditAutoScraper:
 
 def main():
     """Main function"""
+    parser = argparse.ArgumentParser(description='Reddit Auto Scraper')
+    parser.add_argument('--once', action='store_true', 
+                       help='Run scraper once and exit (no continuous mode)')
+    parser.add_argument('--subreddit', type=str, 
+                       help='Subreddit name (without r/)')
+    parser.add_argument('--interval', type=int, 
+                       help='Scraping interval in minutes')
+    parser.add_argument('--output-dir', type=str, 
+                       help='Output directory')
+    
+    args = parser.parse_args()
+    
     print("=== Reddit Auto Scraper Setup ===\n")
     
     try:
-        # Get configuration
-        subreddit = input("Enter subreddit name (without r/): ").strip()
+        # Get configuration (use args if provided, otherwise prompt)
+        subreddit = args.subreddit or input("Enter subreddit name (without r/): ").strip()
         if not subreddit:
             subreddit = Config.DEFAULT_SUBREDDIT
         
-        interval_input = input(f"Scraping interval in minutes (default: {Config.DEFAULT_INTERVAL_MINUTES}): ").strip()
-        interval_minutes = int(float(interval_input)) if interval_input else Config.DEFAULT_INTERVAL_MINUTES
+        if args.interval:
+            interval_minutes = args.interval
+        else:
+            interval_input = input(f"Scraping interval in minutes (default: {Config.DEFAULT_INTERVAL_MINUTES}): ").strip()
+            interval_minutes = int(float(interval_input)) if interval_input else Config.DEFAULT_INTERVAL_MINUTES
         
-        output_dir = input(f"Output directory (default: {Config.DEFAULT_DATA_DIR}): ").strip()
+        output_dir = args.output_dir or input(f"Output directory (default: {Config.DEFAULT_DATA_DIR}): ").strip()
         if not output_dir:
             output_dir = Config.DEFAULT_DATA_DIR
         
         db_path_input = input("Database path (default: auto-create): ").strip()
         db_path = db_path_input if db_path_input else None
         
-        # Create and start scraper
+        # Create scraper
         scraper = RedditAutoScraper(
             subreddit=subreddit,
             output_dir=output_dir,
@@ -286,8 +302,16 @@ def main():
                 for subreddit_name, count in stats['posts_by_subreddit'].items():
                     print(f"   r/{subreddit_name}: {count} posts")
         
-        print("\nTip: Use 'python3 manage_database.py' to clean the database")
-        scraper.start_auto_scraper(interval_minutes)
+        print("\nTip: Use 'python3 utils/manage_database.py' to clean the database")
+        
+        if args.once:
+            # Run once and exit
+            print(f"\n=== Running Scraper Once (r/{subreddit}) ===")
+            scraper.run_scraping_job()
+            print("\nScraping completed!")
+        else:
+            # Run continuous mode
+            scraper.start_auto_scraper(interval_minutes)
         
     except (KeyboardInterrupt, EOFError):
         print("\n\nSetup cancelled by user.")

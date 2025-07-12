@@ -13,7 +13,7 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config
+from utils.config import Config
 
 class DatabaseManager:
     """Database manager for handling SQLite operations"""

@@ -14,7 +14,7 @@ import json
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import Config
+from utils.config import Config
 from utils.database import DatabaseManager
 from utils.file_manager import FileManager
 from utils.logger import LoggerManager

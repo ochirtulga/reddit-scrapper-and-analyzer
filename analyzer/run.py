@@ -5,7 +5,6 @@ Simple script to run word frequency analysis on Reddit scraped data
 
 from analyzer import WordFrequencyAnalyzer
 import argparse
-import sys
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze word frequencies in Reddit scraped data')
