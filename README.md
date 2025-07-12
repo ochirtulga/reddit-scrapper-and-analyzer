@@ -64,8 +64,8 @@ python run.py --search "python"
 python run.py --word-details "machine"
 
 # Database management
-python3 manage_database.py
-python3 clean_db.py stats
+python3 utils/manage_database.py
+python3 utils/clean_db.py stats
 ```
 
 ## Output Files
