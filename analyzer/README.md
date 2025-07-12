@@ -67,16 +67,16 @@ python run_word_analysis.py --top-n 100 --data-source database
 ## Sample Output
 
 ```
-🏆 Top 10 Most Common Words:
+Top 10 Most Common Words:
  1. python                   45 times
  2. data                     38 times
  3. learning                 32 times
  4. code                     28 times
  5. project                  25 times
 
-✅ Analysis Complete!
-📈 Total unique words: 1,250
-📊 Total word occurrences: 15,420
+Analysis Complete!
+Total unique words: 1,250
+Total word occurrences: 15,420
 ```
 
 ## Configuration
