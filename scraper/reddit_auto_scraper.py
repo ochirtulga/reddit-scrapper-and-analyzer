@@ -141,9 +141,9 @@ class RedditAutoScraper:
                     for word, count in word_freqs.items():
                         new_word_frequencies[word] = new_word_frequencies.get(word, 0) + count
             
-            # Update database with new word frequencies
+            # Update database with new word frequencies (include subreddit)
             if new_word_frequencies:
-                self.db_manager.update_word_frequencies(new_word_frequencies)
+                self.db_manager.update_word_frequencies(new_word_frequencies, self.subreddit)
                 self.logger.info(f"Updated word frequencies for {len(new_word_frequencies)} words")
             
         except Exception as e:
