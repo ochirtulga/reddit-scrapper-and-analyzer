@@ -1,89 +1,87 @@
-# Reddit Data Mining & Word Analysis
+# Reddit Data Mining & Word Analysis (Modern Version)
 
-Automated Reddit scraping and word frequency analysis system.
+A full-stack system for automated Reddit scraping, live word frequency analysis, and interactive exploration via a modern React UI.
+
+---
 
 ## Quick Start
 
+### 1. Backend (FastAPI)
 ```bash
-# Install dependencies
-pip install requests beautifulsoup4
-
-# Scrape Reddit data (continuous mode)
-cd scraper
-python scraper.py
-
-# Scrape Reddit data ONCE (single run)
-python scraper.py --once
-
-# Analyze word frequencies
-cd analyzer
-python run.py
+cd backend/app
+pip install -r requirements.txt
+uvicorn main:app --reload
 ```
 
-## Project Structure
+### 2. Frontend (React + Vite)
+```bash
+cd ui
+npm install
+npm run dev
+```
 
-```
-reddit-scrapper-and-analyzer/
-├── scraper/                 # Reddit data collection
-├── analyzer/                # Word frequency analysis
-├── data/                    # All data storage
-│   ├── scraped/            # Raw scraped data (CSV/JSON)
-│   ├── analyzed/           # Processed analysis data
-│   ├── db/                 # SQLite database
-│   └── logs/               # Log files
-└── README.md
-```
+---
 
 ## Features
+- **Live Reddit Scraping:** Scrape any subreddit on demand, specifying the number of posts.
+- **Incremental Word Frequency Analysis:** Word frequencies are updated after every scrape and can be re-analyzed at any time.
+- **Subreddit-Filtered Top Words:** Instantly filter top words by subreddit in the UI.
+- **Modern UI:** Beautiful, responsive React frontend with Material-UI components.
+- **Database-Only Storage:** All data is stored in PostgreSQL/SQLite; no CSV/JSON file outputs.
+- **API-Driven:** All features are accessible via documented REST API endpoints.
 
-### Reddit Scraper
-- Automated scraping at configurable intervals (default: 60 min)
-- Incremental updates (only new posts)
-- SQLite database tracking
-- JSON/CSV output formats
+---
 
-### Word Analyzer
-- Text cleaning and word filtering
-- Multiple data sources (files/database)
-- Context tracking and source analysis
-- JSON/CSV/Text report outputs
+## Database Schema (Key Tables)
+- `scraped_posts`: All scraped Reddit posts.
+- `word_frequencies`: Word counts per (word, subreddit).
+- `scraped_subreddits`: List of all subreddits ever scraped (drives the UI filter dropdown).
+- `scraping_sessions`: Metadata for each scraping session.
 
-## Usage Examples
+---
 
-```bash
-# Scrape r/Python every 30 minutes (continuous)
-cd scraper
-python scraper.py --subreddit Python --interval 30
+## API Endpoints (Highlights)
+- `POST /scraper/run-once` — Scrape a subreddit (specify subreddit and number of posts).
+- `GET /analyzer` — Get top words, optionally filtered by subreddit.
+- `GET /analyzer/subreddits` — List all subreddits ever scraped.
+- `POST /analyzer/incremental` — Run incremental word frequency analysis.
+- `GET /db/stats` — Get database statistics.
 
-# Scrape r/Python ONCE (single run)
-python scraper.py --once --subreddit Python
+---
 
-# Analyze word frequencies
-cd analyzer
-python run.py
+## UI Features
+- **Subreddit Filter:** Dropdown shows all scraped subreddits (live from DB).
+- **Top Words Table:** Shows most frequent words for the selected subreddit.
+- **Scrape Controls:** Choose subreddit and number of posts, trigger scrape, and run incremental analysis from the UI.
+- **Live Updates:** All data is fetched live from the backend after each operation.
 
-# Search for specific words
-python run.py --search "python"
+---
 
-# Get word details
-python run.py --word-details "machine"
+## How to Use
+1. Start the backend and frontend as above.
+2. In the UI, select a subreddit and number of posts, then click "Run Scraper & Analyze".
+3. Use the filter dropdown to explore top words by subreddit.
+4. Click "Incremental Analyze" to re-analyze word frequencies at any time.
 
-# Database management
-python3 utils/manage_database.py
-python3 utils/clean_db.py stats
-```
-
-## Output Files
-
-- **Scraped**: `data/scraped/{csv,json}/reddit_auto_[subreddit]_[timestamp].{csv,json}`
-- **Analyzed**: `data/analyzed/{csv,json}/word_frequencies_[timestamp].{csv,json}`
-- **Reports**: `data/analyzed/reports/word_analysis_report_[timestamp].txt`
-- **Database**: `data/db/reddit_scraper.db`
-- **Logs**: `data/logs/{reddit_scraper,word_analyzer}.log`
+---
 
 ## Configuration
+- **Database:** Uses PostgreSQL or SQLite (see `backend/app/core/utils/config.py`).
+- **Logging:** Logs are stored in `data/logs/`.
+- **No file outputs:** All analysis is stored in the database and accessed via API/UI.
 
-- **Subreddit**: Configurable (default: Python)
-- **Interval**: Configurable in minutes (default: 60)
-- **Output**: Customizable directories
-- **Data sources**: Files, database, or both 
+---
+
+## Project Structure (Key Parts)
+```
+backend/app/
+  api/           # FastAPI endpoints
+  core/          # Scraper, analyzer, database logic
+  main.py        # FastAPI app entry point
+ui/              # React frontend (Vite + MUI)
+```
+
+---
+
+## Authors & License
+MIT License. Modernized and maintained by your team. 

@@ -39,29 +39,7 @@ class Config:
     CONTEXT_LENGTH = 50
     
     # Database settings
-    DATABASE_TABLES = {
-        'scraped_posts': '''
-            CREATE TABLE IF NOT EXISTS scraped_posts (
-                post_id TEXT PRIMARY KEY,
-                title TEXT,
-                author TEXT,
-                score INTEGER,
-                num_comments INTEGER,
-                created_utc REAL,
-                scraped_at TEXT,
-                subreddit TEXT
-            )
-        ''',
-        'scraping_sessions': '''
-            CREATE TABLE IF NOT EXISTS scraping_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_start TEXT,
-                session_end TEXT,
-                posts_scraped INTEGER,
-                subreddit TEXT
-            )
-        '''
-    }
+    # Removed old DATABASE_TABLES dict with AUTOINCREMENT. Use get_database_tables() only.
     
     # Stop words for text analysis
     STOP_WORDS = {
@@ -89,6 +67,16 @@ class Config:
         'date_format': '%Y-%m-%d %H:%M:%S'
     }
     
+    # Database type: 'sqlite' or 'postgres'
+    DB_TYPE = os.environ.get('DB_TYPE', 'postgres')
+
+    # PostgreSQL settings
+    POSTGRES_HOST = os.environ.get('POSTGRES_HOST', 'localhost')
+    POSTGRES_PORT = int(os.environ.get('POSTGRES_PORT', 5432))
+    POSTGRES_DB = os.environ.get('POSTGRES_DB', 'redditdb')
+    POSTGRES_USER = os.environ.get('POSTGRES_USER', 'reddituser')
+    POSTGRES_PASSWORD = os.environ.get('POSTGRES_PASSWORD', 'redditpass')
+    
     @classmethod
     def get_db_path(cls, data_dir: str = "", db_name: str = "") -> str:
         """Get database path"""
@@ -102,25 +90,56 @@ class Config:
         return os.path.join(db_dir, actual_db_name)
 
     @classmethod
-    def get_log_path(cls, data_dir: str = "", log_name: str = "") -> str:
-        """Get log file path"""
+    def get_log_path(cls, data_dir: str = "", log_name: str = "", log_type: str = "scraper") -> str:
+        """Get log file path with separate directories for scraper and analyzer"""
         actual_data_dir = data_dir if data_dir else cls.DEFAULT_DATA_DIR
-        actual_log_name = log_name if log_name else cls.DEFAULT_SCRAPER_LOG
-        logs_dir = os.path.join(actual_data_dir, 'logs')
-        
-        # Ensure logs directory exists
+        actual_log_name = log_name if log_name else (cls.DEFAULT_SCRAPER_LOG if log_type == "scraper" else cls.DEFAULT_ANALYZER_LOG)
+
+        # Place logs in code directories
+        if log_type == "analyzer":
+            logs_dir = os.path.join(os.path.dirname(__file__), '..', 'analyzer', 'logs')
+        else:
+            logs_dir = os.path.join(os.path.dirname(__file__), '..', 'scraper', 'logs')
+        logs_dir = os.path.abspath(logs_dir)
         os.makedirs(logs_dir, exist_ok=True)
-        
         return os.path.join(logs_dir, actual_log_name)
-    
+
     @classmethod
-    def get_scraped_dir(cls, data_dir: str = "") -> str:
-        """Get scraped data directory"""
-        actual_data_dir = data_dir if data_dir else cls.DEFAULT_DATA_DIR
-        return os.path.join(actual_data_dir, 'scraped')
-    
-    @classmethod
-    def get_analyzed_dir(cls, data_dir: str = "") -> str:
-        """Get analyzed data directory"""
-        actual_data_dir = data_dir if data_dir else cls.DEFAULT_DATA_DIR
-        return os.path.join(actual_data_dir, 'analyzed') 
+    def get_database_tables(cls):
+        return {
+            'scraped_posts': '''
+                CREATE TABLE IF NOT EXISTS scraped_posts (
+                    post_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    author TEXT,
+                    score INTEGER,
+                    num_comments INTEGER,
+                    created_utc DOUBLE PRECISION,
+                    scraped_at TEXT,
+                    subreddit TEXT,
+                    url TEXT
+                )
+            ''',
+            'scraping_sessions': '''
+                CREATE TABLE IF NOT EXISTS scraping_sessions (
+                    id SERIAL PRIMARY KEY,
+                    session_start TEXT,
+                    session_end TEXT,
+                    posts_scraped INTEGER,
+                    subreddit TEXT
+                )
+            ''',
+            'word_frequencies': '''
+                CREATE TABLE IF NOT EXISTS word_frequencies (
+                    word TEXT NOT NULL,
+                    subreddit TEXT NOT NULL,
+                    frequency INTEGER NOT NULL,
+                    PRIMARY KEY (word, subreddit)
+                )
+            ''',
+            'scraped_subreddits': '''
+                CREATE TABLE IF NOT EXISTS scraped_subreddits (
+                    subreddit TEXT PRIMARY KEY
+                )
+            ''',
+        }

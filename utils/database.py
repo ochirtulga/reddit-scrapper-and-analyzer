@@ -3,36 +3,42 @@
 Database utilities for Reddit Data Mining System
 """
 
-import sqlite3
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Counter, Optional, List, Dict, Any
 from contextlib import contextmanager
+from .config import Config
 import sys
 import os
+import psycopg2
 
 # Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from utils.config import Config
 
 class DatabaseManager:
-    """Database manager for handling SQLite operations"""
-    
-    def __init__(self, db_path: str):
-        self.db_path = db_path
+    """Database manager for handling SQLite and PostgreSQL operations"""
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
-    
+        self.db_type = Config.DB_TYPE
+
     @contextmanager
     def get_connection(self):
-        """Context manager for database connections"""
+        """Context manager for database connections (SQLite or PostgreSQL)"""
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = psycopg2.connect(
+                host=Config.POSTGRES_HOST,
+                port=Config.POSTGRES_PORT,
+                dbname=Config.POSTGRES_DB,
+                user=Config.POSTGRES_USER,
+                password=Config.POSTGRES_PASSWORD
+            )
             yield conn
         except Exception as e:
             self.logger.error(f"Database connection error: {e}")
             if conn:
-                conn.rollback()
+                if self.db_type == 'sqlite':
+                    conn.rollback()
             raise
         finally:
             if conn:
@@ -43,14 +49,12 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                
-                for table_name, create_sql in Config.DATABASE_TABLES.items():
+                tables = Config.get_database_tables()
+                for table_name, create_sql in tables.items():
                     cursor.execute(create_sql)
                     self.logger.info(f"Created table: {table_name}")
-                
                 conn.commit()
                 return True
-                
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}")
             return False
@@ -127,9 +131,11 @@ class DatabaseManager:
                 # Drop existing tables
                 cursor.execute("DROP TABLE IF EXISTS scraped_posts")
                 cursor.execute("DROP TABLE IF EXISTS scraping_sessions")
+                cursor.execute("DROP TABLE IF EXISTS word_frequencies")
                 
                 # Recreate tables
-                for table_name, create_sql in Config.DATABASE_TABLES.items():
+                tables = Config.get_database_tables()
+                for table_name, create_sql in tables.items():
                     cursor.execute(create_sql)
                     self.logger.info(f"Recreated table: {table_name}")
                 
@@ -187,7 +193,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(query, params)
+                cursor.execute(query.replace('?', '%s'), params)
                 return cursor.fetchall()
         except Exception as e:
             self.logger.error(f"Query execution error: {e}")
@@ -198,7 +204,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(query, params)
+                cursor.execute(query.replace('?', '%s'), params)
                 conn.commit()
                 return True
         except Exception as e:
@@ -221,11 +227,19 @@ class DatabaseManager:
         return bool(result)
     
     def save_post(self, post_data: Dict[str, Any]) -> bool:
-        """Save a post to the database"""
+        """Save a post to the database (upsert)"""
         query = '''
-            INSERT OR REPLACE INTO scraped_posts 
-            (post_id, title, author, score, num_comments, created_utc, scraped_at, subreddit)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scraped_posts (post_id, title, author, score, num_comments, created_utc, scraped_at, subreddit, url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (post_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                author = EXCLUDED.author,
+                score = EXCLUDED.score,
+                num_comments = EXCLUDED.num_comments,
+                created_utc = EXCLUDED.created_utc,
+                scraped_at = EXCLUDED.scraped_at,
+                subreddit = EXCLUDED.subreddit,
+                url = EXCLUDED.url
         '''
         params = (
             post_data['post_id'],
@@ -235,7 +249,8 @@ class DatabaseManager:
             post_data['num_comments'],
             post_data['created_utc'],
             post_data['scraped_at'],
-            post_data['subreddit']
+            post_data['subreddit'],
+            post_data.get('url', None)
         )
         return self.execute_update(query, params)
     
@@ -254,7 +269,7 @@ class DatabaseManager:
     def get_posts_for_analysis(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get posts for word analysis"""
         query = '''
-            SELECT post_id, title, author, score, num_comments, created_utc, scraped_at, subreddit
+            SELECT post_id, title, author, score, num_comments, created_utc, scraped_at, subreddit, url
             FROM scraped_posts
             ORDER BY created_utc DESC
         '''
@@ -274,7 +289,87 @@ class DatabaseManager:
                 'num_comments': row[4],
                 'created_utc': row[5],
                 'scraped_at': row[6],
-                'subreddit': row[7]
+                'subreddit': row[7],
+                'url': row[8]
             }
             for row in result
         ] 
+
+    def save_word_frequencies(self, word_frequencies: Counter, subreddit: str):
+        """Upsert word frequencies into the database for a specific subreddit"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for word, freq in word_frequencies.items():
+                query = """
+                    INSERT INTO word_frequencies (word, subreddit, frequency)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (word, subreddit) DO UPDATE SET frequency = EXCLUDED.frequency
+                """
+                cursor.execute(query, (word, subreddit, freq))
+            conn.commit()
+
+    def update_word_frequencies(self, new_word_frequencies: Dict[str, int], subreddit: str):
+        """Increment word frequencies for new posts (additive update) for a specific subreddit"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for word, freq in new_word_frequencies.items():
+                query = """
+                    INSERT INTO word_frequencies (word, subreddit, frequency)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (word, subreddit) DO UPDATE SET frequency = word_frequencies.frequency + EXCLUDED.frequency
+                """
+                cursor.execute(query, (word, subreddit, freq))
+            conn.commit()
+
+    def get_top_words(self, top_n: int = 10, subreddit: str = None) -> List[Dict[str, int]]:
+        """Get top words, optionally filtered by subreddit"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if subreddit:
+                query = """
+                    SELECT word, frequency FROM word_frequencies
+                    WHERE subreddit = %s
+                    ORDER BY frequency DESC
+                    LIMIT %s
+                """
+                cursor.execute(query, (subreddit, top_n))
+            else:
+                query = """
+                    SELECT word, SUM(frequency) as frequency FROM word_frequencies
+                    GROUP BY word
+                    ORDER BY frequency DESC
+                    LIMIT %s
+                """
+                cursor.execute(query, (top_n,))
+            results = cursor.fetchall()
+            return [{"word": row[0], "frequency": row[1]} for row in results] 
+
+    def list_subreddits(self) -> List[str]:
+        """List all subreddits present in the word_frequencies table"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT subreddit FROM word_frequencies ORDER BY subreddit ASC")
+            results = cursor.fetchall()
+            return [row[0] for row in results] 
+
+    def add_scraped_subreddit(self, subreddit: str):
+        """Insert a subreddit into scraped_subreddits if not already present"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO scraped_subreddits (subreddit)
+                VALUES (%s)
+                ON CONFLICT (subreddit) DO NOTHING
+                """,
+                (subreddit,)
+            )
+            conn.commit()
+
+    def list_scraped_subreddits(self) -> list:
+        """List all subreddits from scraped_subreddits table"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT subreddit FROM scraped_subreddits ORDER BY subreddit ASC")
+            results = cursor.fetchall()
+            return [row[0] for row in results] 
